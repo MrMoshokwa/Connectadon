@@ -1,0 +1,1402 @@
+import { useState, useEffect } from "react";
+import { AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DESIGN TOKENS
+// ─────────────────────────────────────────────────────────────────────────────
+const C = {
+  black:"#0A0A0A", white:"#FFFFFF", off:"#F8F8F8",
+  light:"#F2F2F2", border:"#E4E4E4", muted:"#888",
+  gold:"#C9A227", goldD:"#A8841A", goldP:"rgba(201,162,39,0.11)", goldB:"rgba(201,162,39,0.30)",
+  green:"#00C853", greenP:"rgba(0,200,83,0.10)", greenB:"rgba(0,200,83,0.24)",
+  red:"#E53935", redP:"rgba(229,57,53,0.10)",
+  blue:"#2563EB", blueP:"rgba(37,99,235,0.10)",
+};
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:#fff;font-family:'Barlow',sans-serif;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scaleIn{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)}}
+@keyframes logoIn{0%{opacity:0;transform:scale(0.8)}100%{opacity:1;transform:scale(1)}}
+@keyframes dotMove{0%{transform:translateX(0);opacity:0.2}50%{transform:translateX(16px);opacity:1}100%{transform:translateX(32px);opacity:0.2}}
+@keyframes lineGrow{from{width:0}to{width:100%}}
+@keyframes tagIn{from{opacity:0;letter-spacing:6px}to{opacity:1;letter-spacing:3px}}
+@keyframes feedIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes barRise{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
+@keyframes shimmer{0%{opacity:0.5}50%{opacity:1}100%{opacity:0.5}}
+`;
+
+const fmt = n => `R${Number(n).toLocaleString("en-ZA")}`;
+const fmtK = n => n>=1000?`R${(n/1000).toFixed(1)}K`:`R${n}`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRODUCT CATEGORY MARGINS — Full structure 20%–60%
+// ─────────────────────────────────────────────────────────────────────────────
+const MARGINS = [
+  {cat:"Phone Accessories",emoji:"🔌",min:45,max:60,color:C.black,
+   why:"Buy at R30–R60 wholesale, sell at R120–R250 retail. Mass market demand means fast turnover.",
+   example:{buy:40,sell:150,pool:10000},
+   products:["Chargers","Cables","Cases","Screen Protectors","Power Banks"]},
+  {cat:"Fragrances",emoji:"🧴",min:40,max:55,color:C.gold,
+   why:"Wholesale fragrance prices are 50–70% below retail. Premium scents have the best margin in lifestyle.",
+   example:{buy:600,sell:1500,pool:20000},
+   products:["Dior","Versace","Gucci","Hugo Boss","Calvin Klein"]},
+  {cat:"Sunglasses & Eyewear",emoji:"🕶️",min:40,max:55,color:"#6B4FBB",
+   why:"Mid-tier and fashion frames bought at R80–R150 wholesale sell at R300–R600 easily.",
+   example:{buy:100,sell:350,pool:15000},
+   products:["Ray-Ban","Oakley","Fashion Frames","Sport Shades"]},
+  {cat:"Jewellery",emoji:"📿",min:35,max:50,color:"#B8860B",
+   why:"Low wholesale cost, high perceived value. Chains, bracelets and rings move fast.",
+   example:{buy:80,sell:300,pool:8000},
+   products:["Chains","Bracelets","Rings","Earrings"]},
+  {cat:"Clothing",emoji:"👕",min:30,max:45,color:"#2563EB",
+   why:"Depends on supplier. Fast fashion margins strong. Branded items lower.",
+   example:{buy:120,sell:350,pool:25000},
+   products:["T-Shirts","Hoodies","Joggers","Dresses","Chinos"]},
+  {cat:"Sneakers & Footwear",emoji:"👟",min:25,max:40,color:C.green,
+   why:"Non-branded and mid-tier styles have strong margins. Nike/Adidas limited edition can go higher.",
+   example:{buy:400,sell:1000,pool:40000},
+   products:["Nike","Adidas","Puma","Fashion Sneakers"]},
+  {cat:"Headphones & Audio",emoji:"🎧",min:25,max:38,color:"#DC2626",
+   why:"Mid-tier audio brands sourced directly from importers at 40–50% below retail.",
+   example:{buy:800,sell:2200,pool:30000},
+   products:["Sony","JBL","Samsung","Xiaomi Audio"]},
+  {cat:"Smart Watches & Wearables",emoji:"⌚",min:28,max:40,color:"#7C3AED",
+   why:"Growing demand with strong wholesale-to-retail gap especially in mid-tier brands.",
+   example:{buy:1200,sell:3500,pool:50000},
+   products:["Samsung Watch","Xiaomi Band","Fitness Trackers","Fashion Watches"]},
+  {cat:"Tablets",emoji:"📟",min:22,max:32,color:"#0891B2",
+   why:"Decent margins on mid-tier Android tablets. Apple margins thinner.",
+   example:{buy:2500,sell:5500,pool:60000},
+   products:["Samsung Tab","Xiaomi Pad","Huawei Tab"]},
+  {cat:"Laptops",emoji:"💻",min:20,max:28,color:C.muted,
+   why:"Volume game, not margin game. Lower markup but higher ticket price makes pools compelling.",
+   example:{buy:5000,sell:8000,pool:80000},
+   products:["Dell","HP","Acer","Lenovo"]},
+  {cat:"Phones",emoji:"📱",min:20,max:28,color:C.muted,
+   why:"Thinnest margins but highest trust product. Pool volumes are large so profit share still meaningful.",
+   example:{buy:6000,sell:9000,pool:80000},
+   products:["iPhone","Samsung","Xiaomi","Huawei"]},
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS DATA
+// ─────────────────────────────────────────────────────────────────────────────
+const CHART_DATA = {
+  "1D":[
+    {t:"00:00",sales:0,profit:0,contributions:0},
+    {t:"04:00",sales:340,profit:97,contributions:1000},
+    {t:"08:00",sales:820,profit:230,contributions:2500},
+    {t:"10:00",sales:1450,profit:406,contributions:3000},
+    {t:"12:00",sales:2100,profit:588,contributions:4500},
+    {t:"14:00",sales:1800,profit:504,contributions:2000},
+    {t:"16:00",sales:2400,profit:672,contributions:5000},
+    {t:"18:00",sales:3100,profit:868,contributions:6000},
+    {t:"20:00",sales:2800,profit:784,contributions:3500},
+    {t:"22:00",sales:1900,profit:532,contributions:2000},
+  ],
+  "7D":[
+    {t:"Mon",sales:8700,profit:2436,contributions:12000},
+    {t:"Tue",sales:12400,profit:3472,contributions:18000},
+    {t:"Wed",sales:9800,profit:2744,contributions:9000},
+    {t:"Thu",sales:15600,profit:4368,contributions:22000},
+    {t:"Fri",sales:21000,profit:5880,contributions:31000},
+    {t:"Sat",sales:31500,profit:8820,contributions:45000},
+    {t:"Sun",sales:18900,profit:5292,contributions:28000},
+  ],
+  "1M":[
+    {t:"W1",sales:42000,profit:11760,contributions:65000},
+    {t:"W2",sales:58000,profit:16240,contributions:88000},
+    {t:"W3",sales:71000,profit:19880,contributions:102000},
+    {t:"W4",sales:89000,profit:24920,contributions:134000},
+  ],
+  "3M":[
+    {t:"Jan",sales:185000,profit:51800,contributions:280000},
+    {t:"Feb",sales:210000,profit:58800,contributions:315000},
+    {t:"Mar",sales:267000,profit:74760,contributions:398000},
+  ],
+  "1Y":[
+    {t:"Jan",sales:185000,profit:51800,contributions:280000},
+    {t:"Feb",sales:210000,profit:58800,contributions:315000},
+    {t:"Mar",sales:267000,profit:74760,contributions:398000},
+    {t:"Apr",sales:243000,profit:68040,contributions:362000},
+    {t:"May",sales:298000,profit:83440,contributions:445000},
+    {t:"Jun",sales:334000,profit:93520,contributions:501000},
+    {t:"Jul",sales:289000,profit:80920,contributions:433000},
+    {t:"Aug",sales:312000,profit:87360,contributions:468000},
+    {t:"Sep",sales:378000,profit:105840,contributions:567000},
+    {t:"Oct",sales:421000,profit:117880,contributions:631000},
+    {t:"Nov",sales:456000,profit:127680,contributions:684000},
+    {t:"Dec",sales:512000,profit:143360,contributions:768000},
+  ],
+};
+
+const PIE_DATA = [
+  {name:"Mobile Phones",value:33000,color:C.black},
+  {name:"Sneakers",value:69000,color:C.gold},
+  {name:"Fragrances",value:19000,color:C.green},
+  {name:"Headphones",value:12000,color:"#888"},
+  {name:"Watches",value:8000,color:"#E4E4E4"},
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POOL DATA
+// ─────────────────────────────────────────────────────────────────────────────
+const POOLS = [
+  {id:1,name:"Mobile Phones",emoji:"📱",cat:"Electronics",catMargin:MARGINS[10],
+   min:500,max:5000,funded:33000,target:80000,profit:24,members:142,days:18,
+   cycleStage:2, // 0=open 1=target reached 2=stock purchased 3=selling 4=closing 5=paid
+   supplier:"Cape Tech Wholesale · Verified · 22 previous orders",
+   platformFee:8,
+   receipt:{date:"14 Apr 2025",items:"84x iPhone 14 Pro cases, 120x screen protectors, 60x chargers",wholesaleCost:"R28 400",supplier:"Cape Tech Wholesale (Pty) Ltd",ref:"CTW-2025-0414"},
+   feed:[
+     {time:"2hr ago",event:"12 units sold — Takealot marketplace",icon:"🛒"},
+     {time:"5hr ago",event:"Stock delivery confirmed — 264 units",icon:"📦"},
+     {time:"1d ago",event:"Wholesale purchase completed — R28 400",icon:"✅"},
+     {time:"2d ago",event:"Pool target reached — buying commenced",icon:"🎯"},
+     {time:"3d ago",event:"Tshepo M. contributed R2 000",icon:"💰"},
+     {time:"3d ago",event:"Nomsa D. contributed R500",icon:"💰"},
+   ]},
+  {id:2,name:"Sneakers & Footwear",emoji:"👟",cat:"Fashion",catMargin:MARGINS[5],
+   min:500,max:5000,funded:69000,target:80000,profit:30,members:289,days:6,
+   cycleStage:3,
+   supplier:"SA Footwear Imports · Verified · 8 previous orders",
+   platformFee:8,
+   receipt:{date:"08 Apr 2025",items:"180x Nike AF1, 90x Adidas Superstar, 60x Puma RS-X",wholesaleCost:"R58 200",supplier:"SA Footwear Imports CC",ref:"SAFI-2025-0408"},
+   feed:[
+     {time:"30min ago",event:"47 units sold — Connectadon marketplace",icon:"🛒"},
+     {time:"3hr ago",event:"89 units sold — WhatsApp reseller network",icon:"🛒"},
+     {time:"1d ago",event:"Lerato K. contributed R3 500",icon:"💰"},
+     {time:"2d ago",event:"Stock photography completed",icon:"📸"},
+   ]},
+  {id:3,name:"Fragrances",emoji:"🧴",cat:"Beauty",catMargin:MARGINS[1],
+   min:250,max:3000,funded:19000,target:60000,profit:42,members:97,days:22,
+   cycleStage:1,
+   supplier:"Luxury Scents SA · Verified · 5 previous orders",
+   platformFee:8,
+   receipt:null,
+   feed:[
+     {time:"1hr ago",event:"Sipho N. contributed R1 000",icon:"💰"},
+     {time:"4hr ago",event:"Amahle B. contributed R500",icon:"💰"},
+     {time:"6hr ago",event:"Pool opened — contributions live",icon:"🎉"},
+   ]},
+  {id:4,name:"Headphones & Audio",emoji:"🎧",cat:"Electronics",catMargin:MARGINS[6],
+   min:300,max:4000,funded:12000,target:50000,profit:30,members:63,days:30,
+   cycleStage:0,
+   supplier:"Tech Sound Distributors · Pending verification",
+   platformFee:8,
+   receipt:null,
+   feed:[
+     {time:"2hr ago",event:"Dineo M. contributed R2 000",icon:"💰"},
+     {time:"5hr ago",event:"Pool created — open for contributions",icon:"🎉"},
+   ]},
+  {id:5,name:"Smart Watches",emoji:"⌚",cat:"Electronics",catMargin:MARGINS[7],
+   min:800,max:6000,funded:8000,target:70000,profit:34,members:41,days:45,
+   cycleStage:0,
+   supplier:"Wearable World SA · Verified · 3 previous orders",
+   platformFee:8,
+   receipt:null,
+   feed:[
+     {time:"1d ago",event:"Pool opened — contributions live",icon:"🎉"},
+   ]},
+];
+
+const MY_POOLS = [
+  {id:1,name:"Mobile Phones",emoji:"📱",contributed:3000,share:720,status:"active",profit:24,days:18},
+  {id:2,name:"Fragrances",emoji:"🧴",contributed:1000,share:420,status:"paid",profit:42,days:0},
+];
+
+const HISTORY = [
+  {id:1,name:"Mobile Phones",emoji:"📱",date:"12 Apr 2025",contributed:3000,share:720,status:"active",cycleEnd:"30 Apr 2025"},
+  {id:2,name:"Fragrances",emoji:"🧴",date:"02 Mar 2025",contributed:1000,share:420,status:"paid",paidOn:"18 Mar 2025",ref:"SPO-2025-0318"},
+  {id:3,name:"Sneakers",emoji:"👟",date:"10 Jan 2025",contributed:2500,share:750,status:"paid",paidOn:"28 Jan 2025",ref:"SPO-2025-0128"},
+  {id:4,name:"Headphones",emoji:"🎧",date:"05 Nov 2024",contributed:1500,share:450,status:"paid",paidOn:"22 Nov 2024",ref:"SPO-2024-1122"},
+];
+
+const NOTIFS_DATA = [
+  {id:1,icon:"💰",title:"Profit Share Paid Out!",body:"Fragrances pool closed. R420 credited to your balance. Ref: SPO-2025-0318",time:"2 min ago",read:false},
+  {id:2,icon:"⏰",title:"Pool Closing Soon",body:"Sneakers pool closes in 6 days. 86% funded — nearly there!",time:"1 hr ago",read:false},
+  {id:3,icon:"🛒",title:"Products Selling Fast",body:"47 Sneaker units sold today. Your profit share is growing.",time:"3 hrs ago",read:false},
+  {id:4,icon:"📦",title:"Stock Purchased!",body:"Mobile Phones pool: 264 units purchased from Cape Tech Wholesale.",time:"1 day ago",read:true},
+  {id:5,icon:"🔗",title:"Referral Reward!",body:"Thabo M. contributed. R100 added to your balance.",time:"Yesterday",read:true},
+  {id:6,icon:"🆕",title:"New Pool: Smart Watches",body:"Smart Watches pool now open. Up to 40% profit share. Contribute from R800.",time:"3 days ago",read:true},
+];
+
+// Cycle stages
+const CYCLE_STAGES = [
+  {label:"Pool Open",sub:"Accepting contributions",icon:"🟢"},
+  {label:"Target Reached",sub:"Buying pool filled",icon:"🎯"},
+  {label:"Stock Purchased",sub:"Products bought",icon:"📦"},
+  {label:"Selling",sub:"Products on market",icon:"🛒"},
+  {label:"Cycle Closing",sub:"Final sales",icon:"⏰"},
+  {label:"Payouts Sent",sub:"Profit distributed",icon:"✅"},
+];
+
+// Shop data
+const TECH_PRODUCTS = [
+  {id:1,name:"iPhone 14 Pro",brand:"Apple",cat:"Phones",price:8999,was:12000,emoji:"📱",badge:"Best Seller",sizes:[],gender:""},
+  {id:2,name:"Samsung Galaxy S23",brand:"Samsung",cat:"Phones",price:7999,was:11000,emoji:"📱",badge:"Hot",sizes:[],gender:""},
+  {id:3,name:"Xiaomi Redmi Note 12",brand:"Xiaomi",cat:"Phones",price:2999,was:4500,emoji:"📱",badge:"Value",sizes:[],gender:""},
+  {id:4,name:"Dell Latitude i5",brand:"Dell",cat:"Laptops",price:6399,was:9000,emoji:"💻",badge:"",sizes:[],gender:""},
+  {id:5,name:"MacBook Air M2",brand:"Apple",cat:"Laptops",price:18999,was:24000,emoji:"💻",badge:"Premium",sizes:[],gender:""},
+  {id:6,name:"Sony WH-1000XM5",brand:"Sony",cat:"Earphones",price:4999,was:7500,emoji:"🎧",badge:"Top Rated",sizes:[],gender:""},
+  {id:7,name:"AirPods Pro 2",brand:"Apple",cat:"Earphones",price:4499,was:6500,emoji:"🎧",badge:"",sizes:[],gender:""},
+  {id:8,name:"Samsung Galaxy Tab S8",brand:"Samsung",cat:"Tablets",price:8999,was:12000,emoji:"📟",badge:"",sizes:[],gender:""},
+  {id:9,name:"65W GaN Charger",brand:"Xiaomi",cat:"Accessories",price:299,was:500,emoji:"🔌",badge:"",sizes:[],gender:""},
+  {id:10,name:"USB-C Hub 7-in-1",brand:"Huawei",cat:"Accessories",price:399,was:700,emoji:"🔌",badge:"",sizes:[],gender:""},
+];
+
+const LIFE_PRODUCTS = [
+  {id:101,name:"Nike Air Force 1",brand:"Nike",cat:"Sneakers",price:1299,was:1800,emoji:"👟",badge:"Hot",sizes:["36","37","38","39","40","41","42","43","44","45"],gender:"Unisex"},
+  {id:102,name:"Adidas Superstar",brand:"Adidas",cat:"Sneakers",price:1199,was:1700,emoji:"👟",badge:"",sizes:["36","37","38","39","40","41","42","43","44","45"],gender:"Unisex"},
+  {id:103,name:"Nike Jordan 1 Retro",brand:"Nike",cat:"Sneakers",price:2499,was:3500,emoji:"👟",badge:"Limited",sizes:["36","37","38","39","40","41","42","43","44","45"],gender:"Men"},
+  {id:104,name:"Dior Sauvage 100ml",brand:"Dior",cat:"Scents",price:1499,was:2200,emoji:"🧴",badge:"",sizes:[],gender:"Men"},
+  {id:105,name:"Gucci Flora 50ml",brand:"Gucci",cat:"Scents",price:1799,was:2600,emoji:"🧴",badge:"Premium",sizes:[],gender:"Women"},
+  {id:106,name:"Ray-Ban Aviator",brand:"Ray-Ban",cat:"Sunglasses",price:1899,was:3200,emoji:"🕶️",badge:"Premium",sizes:[],gender:"Unisex"},
+  {id:107,name:"Oakley Holbrook",brand:"Oakley",cat:"Sunglasses",price:1599,was:2400,emoji:"🕶️",badge:"",sizes:[],gender:"Unisex"},
+  {id:108,name:"Louis Vuitton Tote",brand:"Louis Vuitton",cat:"Bags",price:8999,was:13000,emoji:"👜",badge:"Luxury",sizes:[],gender:"Women"},
+  {id:109,name:"Nike Backpack",brand:"Nike",cat:"Bags",price:799,was:1200,emoji:"🎒",badge:"",sizes:[],gender:"Unisex"},
+  {id:110,name:"H&M Oversized Tee",brand:"H&M",cat:"Clothing",price:249,was:400,emoji:"👕",badge:"",sizes:["XS","S","M","L","XL","XXL"],gender:"Unisex"},
+  {id:111,name:"Zara Floral Dress",brand:"Zara",cat:"Clothing",price:699,was:1100,emoji:"👗",badge:"New",sizes:["XS","S","M","L","XL","XXL"],gender:"Women"},
+  {id:112,name:"Gold Chain Necklace",brand:"Gucci",cat:"Jewellery",price:1299,was:2000,emoji:"📿",badge:"",sizes:[],gender:"Unisex"},
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED UI COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+const Bar = ({val,max,color=C.green,thin=false}) => (
+  <div style={{background:C.light,borderRadius:99,height:thin?3:4,overflow:"hidden"}}>
+    <div style={{width:`${Math.min((val/max)*100,100)}%`,background:color,height:"100%",borderRadius:99,transition:"width 0.7s"}}/>
+  </div>
+);
+
+const Tag = ({children,type="default",size="normal"}) => {
+  const s={
+    default:{bg:C.light,color:C.muted,border:"none"},
+    dark:{bg:C.black,color:C.white,border:"none"},
+    gold:{bg:C.goldP,color:C.gold,border:`1px solid ${C.goldB}`},
+    green:{bg:C.greenP,color:C.green,border:`1px solid ${C.greenB}`},
+    red:{bg:C.redP,color:C.red,border:"none"},
+    blue:{bg:C.blueP,color:C.blue,border:"none"},
+  };
+  const st=s[type]||s.default;
+  const fs=size==="small"?8:9;
+  return <span style={{background:st.bg,color:st.color,border:st.border,fontSize:fs,fontWeight:800,padding:"3px 8px",borderRadius:3,letterSpacing:0.8,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif",whiteSpace:"nowrap"}}>{children}</span>;
+};
+
+const Card = ({children,style={},onClick}) => (
+  <div onClick={onClick} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:16,...style,cursor:onClick?"pointer":"default"}}>
+    {children}
+  </div>
+);
+
+const BlackBtn = ({children,onClick,disabled,style={}}) => (
+  <button onClick={onClick} disabled={disabled}
+    style={{width:"100%",background:disabled?C.light:C.black,color:disabled?C.muted:C.white,border:"none",borderRadius:10,padding:"14px",fontSize:13,fontWeight:800,cursor:disabled?"default":"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1.2,textTransform:"uppercase",display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all 0.2s",...style}}>
+    {children}
+  </button>
+);
+
+const BackBtn = ({onBack,label="Back"}) => (
+  <button onClick={onBack} style={{display:"inline-flex",alignItems:"center",gap:6,background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 13px",color:C.black,fontSize:12,cursor:"pointer",marginBottom:16,fontFamily:"'Barlow',sans-serif",fontWeight:600}}>
+    ← {label}
+  </button>
+);
+
+const SLabel = ({children,style={}}) => (
+  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:10,...style}}>{children}</div>
+);
+
+const Toggle = ({val,onChange}) => (
+  <div onClick={()=>onChange(!val)} style={{width:42,height:24,borderRadius:99,background:val?C.black:C.light,position:"relative",cursor:"pointer",transition:"background 0.3s",flexShrink:0}}>
+    <div style={{position:"absolute",top:3,left:val?19:3,width:18,height:18,borderRadius:"50%",background:val?C.gold:"#bbb",transition:"left 0.3s"}}/>
+  </div>
+);
+
+const Spin = () => <div style={{width:15,height:15,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>;
+
+function Logo({size=18,light=false}){
+  return <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:size,color:light?C.white:C.black,letterSpacing:-0.3,lineHeight:1}}>-CONNECTADON.</div>;
+}
+
+function CIcon({size=56,light=false}){
+  return(
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <path d="M62 28C58 24 53 22 47 22C35 22 25 32 25 50C25 68 35 78 47 78C53 78 58 76 62 72" stroke={light?"#fff":C.black} strokeWidth="20" strokeLinecap="round" fill="none"/>
+      <rect x="10" y="46" width="16" height="8" rx="4" fill={light?"#fff":C.black}/>
+      <circle cx="76" cy="72" r="6" fill={light?"#fff":C.black}/>
+    </svg>
+  );
+}
+
+const ChartTip = ({active,payload,label}) => {
+  if(!active||!payload||!payload.length) return null;
+  return(
+    <div style={{background:C.black,border:`1px solid ${C.goldB}`,borderRadius:10,padding:"10px 14px"}}>
+      <div style={{fontSize:9,color:C.muted,marginBottom:5,letterSpacing:1,textTransform:"uppercase"}}>{label}</div>
+      {payload.map((p,i)=>(
+        <div key={i} style={{fontSize:11,fontWeight:700,color:p.color||C.gold,fontFamily:"'DM Mono',monospace",marginBottom:i<payload.length-1?2:0}}>
+          {p.name}: {fmtK(p.value)}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPLASH
+// ─────────────────────────────────────────────────────────────────────────────
+function Splash({onDone}){
+  const [p,setP]=useState(0);
+  useEffect(()=>{
+    const t1=setTimeout(()=>setP(1),300);
+    const t2=setTimeout(()=>setP(2),1000);
+    const t3=setTimeout(()=>setP(3),1800);
+    const t4=setTimeout(()=>onDone(),3000);
+    return()=>{[t1,t2,t3,t4].forEach(clearTimeout);};
+  },[]);
+  return(
+    <div style={{position:"fixed",inset:0,background:C.black,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:1000}}>
+      <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(rgba(201,162,39,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(201,162,39,0.04) 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 50% 40%,rgba(201,162,39,0.08) 0%,transparent 60%)"}}/>
+      <div style={{position:"relative",zIndex:1,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center"}}>
+        <div style={{animation:p>=1?"logoIn 0.7s ease both":"none",opacity:p>=1?1:0,marginBottom:24}}><CIcon size={72} light/></div>
+        {p>=2&&(
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2,marginBottom:20,animation:"fadeIn 0.4s ease both"}}>
+            {[0,1,2,3,4].map(i=>(
+              <div key={i} style={{display:"flex",alignItems:"center"}}>
+                <div style={{width:i===2?9:6,height:i===2?9:6,borderRadius:"50%",background:i===2?C.gold:"rgba(255,255,255,0.2)",animation:`dotMove 1.3s ${i*0.14}s ease-in-out infinite`}}/>
+                {i<4&&<div style={{width:12,height:1,background:"rgba(255,255,255,0.08)",margin:"0 2px"}}/>}
+              </div>
+            ))}
+          </div>
+        )}
+        {p>=2&&(
+          <div style={{animation:"fadeUp 0.5s 0.1s ease both"}}>
+            <Logo size={22} light/>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",letterSpacing:3,textTransform:"uppercase",marginTop:8,fontFamily:"'Barlow',sans-serif",animation:p>=3?"tagIn 0.6s ease both":"none"}}>
+              Tech & Lifestyle, Elevated.
+            </div>
+          </div>
+        )}
+      </div>
+      {p>=3&&<div style={{position:"absolute",bottom:0,left:0,right:0,height:3,background:C.gold,animation:"lineGrow 0.5s ease both"}}/>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ONBOARDING
+// ─────────────────────────────────────────────────────────────────────────────
+const SLIDES=[
+  {icon:<CIcon size={56}/>,title:"Welcome to\n-CONNECTADON.",sub:"South Africa's community buying platform. Shop great products or pool together and share the profit.",gold:false},
+  {icon:<span style={{fontSize:48}}>🛍️</span>,title:"Shop Tech &\nLifestyle.",sub:"Browse phones, laptops, sneakers, fragrances and more — sourced directly by us at great prices.",gold:false},
+  {icon:<span style={{fontSize:48}}>💰</span>,title:"Earn 20%–60%\nProfit Share.",sub:"Contribute to a buying pool. We source and sell the products. You earn your fair share of the profit — transparently.",gold:true},
+  {icon:<span style={{fontSize:48}}>🔍</span>,title:"Radical\nTransparency.",sub:"See every purchase receipt, live pool activity, cycle progress, platform fees, and supplier details. Every cent accounted for.",gold:false},
+  {icon:<span style={{fontSize:48}}>🛡️</span>,title:"90-Day\nGuarantee.",sub:"If products don't sell within 90 days, your full contribution is returned. No questions asked. Your money is always protected.",gold:false},
+];
+
+function Onboard({onDone}){
+  const [i,setI]=useState(0);
+  const s=SLIDES[i],last=i===SLIDES.length-1;
+  return(
+    <div style={{position:"fixed",inset:0,background:C.white,display:"flex",flexDirection:"column",zIndex:999,fontFamily:"'Barlow',sans-serif"}}>
+      <div style={{padding:"18px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <Logo size={15}/>
+        {!last&&<button onClick={onDone} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:99,padding:"5px 13px",color:C.muted,fontSize:11,cursor:"pointer",fontFamily:"'Barlow',sans-serif",fontWeight:600}}>Skip</button>}
+      </div>
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px"}}>
+        <div key={i} style={{textAlign:"center",animation:"fadeUp 0.4s ease both"}}>
+          <div style={{width:100,height:100,borderRadius:24,background:s.gold?C.goldP:C.light,border:s.gold?`2px solid ${C.goldB}`:`2px solid ${C.border}`,margin:"0 auto 28px",display:"flex",alignItems:"center",justifyContent:"center"}}>{s.icon}</div>
+          <h2 style={{fontSize:26,fontWeight:900,color:C.black,lineHeight:1.1,marginBottom:14,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:-0.5,textTransform:"uppercase",whiteSpace:"pre-line"}}>{s.title}</h2>
+          <p style={{fontSize:14,color:C.muted,lineHeight:1.75,maxWidth:280,margin:"0 auto"}}>{s.sub}</p>
+        </div>
+      </div>
+      <div style={{padding:"22px 24px 44px"}}>
+        <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:22}}>
+          {SLIDES.map((_,j)=><div key={j} onClick={()=>setI(j)} style={{height:3,borderRadius:99,background:j===i?C.black:C.light,width:j===i?28:7,transition:"all 0.3s",cursor:"pointer"}}/>)}
+        </div>
+        <BlackBtn onClick={()=>last?onDone():setI(i+1)}>{last?"Get Started →":"Next"}</BlackBtn>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROFIT BREAKDOWN SCREEN — Full transparency on how profit is calculated
+// ─────────────────────────────────────────────────────────────────────────────
+function ProfitBreakdownScreen({onBack}){
+  const [activeCat,setActiveCat]=useState(0);
+  const [example,setExample]=useState(1000);
+  const m=MARGINS[activeCat];
+  const minShare=Math.round(example*(m.min/100));
+  const maxShare=Math.round(example*(m.max/100));
+  const platformCut8min=Math.round(minShare*0.08);
+  const platformCut8max=Math.round(maxShare*0.08);
+  const netMin=minShare-platformCut8min;
+  const netMax=maxShare-platformCut8max;
+
+  return(
+    <div style={{minHeight:"100vh",background:C.white,fontFamily:"'Barlow',sans-serif",paddingBottom:40}}>
+      <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,background:C.white,zIndex:10}}>
+        <button onClick={onBack} style={{width:32,height:32,borderRadius:8,background:C.light,border:"none",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+        <div><Logo size={14}/><div style={{fontSize:8,color:C.muted,letterSpacing:1.5,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif"}}>Profit Breakdown</div></div>
+      </div>
+
+      <div style={{padding:"16px 16px 0"}}>
+        {/* Header */}
+        <div style={{background:C.black,borderRadius:16,padding:20,marginBottom:16,position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",bottom:0,left:0,right:0,height:3,background:C.gold}}/>
+          <div style={{fontSize:10,color:C.gold,fontWeight:700,letterSpacing:2,marginBottom:6,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>Connectadon Transparency</div>
+          <div style={{fontSize:20,fontWeight:900,color:C.white,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:-0.3,lineHeight:1.1,marginBottom:8}}>How Your Profit Share<br/>is Calculated.</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",lineHeight:1.6}}>Every cent is tracked. Platform fee is 8% of pool profit. You receive the rest proportionally. No hidden charges.</div>
+        </div>
+
+        {/* The formula */}
+        <SLabel>The Formula — Step by Step</SLabel>
+        <Card style={{marginBottom:16}}>
+          {[
+            {n:"01",t:"Pool Reaches Target",d:"Members contribute until the buying target is met. No buying happens until the pool is full.",color:C.black},
+            {n:"02",t:"Connectadon Buys in Bulk",d:"We use the pooled funds to purchase products at wholesale prices — 30–70% below retail.",color:C.gold},
+            {n:"03",t:"Products Are Sold",d:"Products sold through Connectadon marketplace, WhatsApp reseller network, and other active channels.",color:C.blue},
+            {n:"04",t:"Gross Profit Calculated",d:"Gross profit = Total sales revenue minus the wholesale cost paid.",color:C.green},
+            {n:"05",t:"Platform Fee Deducted",d:"Connectadon deducts 8% of the gross profit to cover operations, sourcing, logistics and platform maintenance.",color:C.red},
+            {n:"06",t:"Your Share is Paid",d:"Remaining 92% of profit split proportionally. (Your contribution ÷ Total pool) × Net profit = Your share.",color:C.green},
+          ].map((s,i)=>(
+            <div key={i} style={{display:"flex",gap:12,marginBottom:i<5?16:0,alignItems:"flex-start"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:18,color:s.color,flexShrink:0,width:26,lineHeight:1.1}}>{s.n}</div>
+              <div><div style={{fontWeight:700,fontSize:13,color:C.black,marginBottom:2}}>{s.t}</div><div style={{fontSize:11,color:C.muted,lineHeight:1.5}}>{s.d}</div></div>
+            </div>
+          ))}
+        </Card>
+
+        {/* Platform fee explainer */}
+        <Card style={{marginBottom:16,background:C.off,border:`1px solid ${C.goldB}`}}>
+          <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+            <span style={{fontSize:20}}>💡</span>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:C.black,marginBottom:4}}>Why the 8% Platform Fee?</div>
+              <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>This covers: supplier sourcing, quality verification, logistics and delivery, platform maintenance, customer support, banking fees (PayFast/FNB), and reserve fund contributions that protect your money. We publish this fee openly because we have nothing to hide.</div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Category margins */}
+        <SLabel>Profit Share Rates by Category</SLabel>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
+          {MARGINS.map((m,i)=>(
+            <button key={i} onClick={()=>setActiveCat(i)}
+              style={{background:activeCat===i?C.black:C.white,border:`1.5px solid ${activeCat===i?C.black:C.border}`,borderRadius:8,padding:"6px 12px",color:activeCat===i?C.white:C.muted,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5,textTransform:"uppercase",transition:"all 0.2s",display:"flex",alignItems:"center",gap:5}}>
+              <span style={{fontSize:14}}>{m.emoji}</span>{m.cat.split(" ")[0]}
+            </button>
+          ))}
+        </div>
+
+        <Card style={{marginBottom:16,animation:"fadeUp 0.3s ease both"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:800,color:C.black,marginBottom:3}}>{m.emoji} {m.cat}</div>
+              <div style={{display:"flex",gap:6}}>
+                <Tag type="gold">+{m.min}% min</Tag>
+                <Tag type="green">+{m.max}% max</Tag>
+              </div>
+            </div>
+            <div style={{background:C.goldP,border:`1px solid ${C.goldB}`,borderRadius:8,padding:"6px 14px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:C.muted,fontWeight:600,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5}}>RANGE</div>
+              <div style={{fontSize:16,fontWeight:900,color:C.gold,fontFamily:"'DM Mono',monospace"}}>{m.min}–{m.max}%</div>
+            </div>
+          </div>
+          <div style={{fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:12}}>{m.why}</div>
+
+          {/* Example purchase */}
+          <div style={{background:C.light,borderRadius:10,padding:12,marginBottom:12}}>
+            <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:8,fontFamily:"'Barlow Condensed',sans-serif"}}>Example Purchase</div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:11,color:C.muted}}>Wholesale cost (per unit)</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.black,fontFamily:"'DM Mono',monospace"}}>{fmt(m.example.buy)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:11,color:C.muted}}>Retail selling price (per unit)</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.black,fontFamily:"'DM Mono',monospace"}}>{fmt(m.example.sell)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",borderTop:`1px solid ${C.border}`,paddingTop:5}}>
+              <span style={{fontSize:11,color:C.green,fontWeight:700}}>Gross profit per unit</span>
+              <span style={{fontSize:11,fontWeight:800,color:C.green,fontFamily:"'DM Mono',monospace"}}>+{fmt(m.example.sell-m.example.buy)}</span>
+            </div>
+          </div>
+
+          {/* Products in this category */}
+          <div>
+            <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:6,fontFamily:"'Barlow Condensed',sans-serif"}}>Products in this category</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {m.products.map(p=><Tag key={p}>{p}</Tag>)}
+            </div>
+          </div>
+        </Card>
+
+        {/* Interactive calculator */}
+        <SLabel>Profit Share Calculator</SLabel>
+        <Card style={{marginBottom:16}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>
+            If I contribute to the <strong style={{color:C.black}}>{m.emoji} {m.cat}</strong> pool:
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            {[250,500,1000,2500,5000].map(v=>(
+              <button key={v} onClick={()=>setExample(v)}
+                style={{flex:1,minWidth:50,background:example===v?C.black:C.white,border:`1.5px solid ${example===v?C.black:C.border}`,borderRadius:8,padding:"9px 4px",fontSize:11,fontWeight:700,color:example===v?C.white:C.muted,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all 0.2s"}}>
+                {fmt(v)}
+              </button>
+            ))}
+          </div>
+
+          {/* Calculation breakdown */}
+          <div style={{background:C.light,borderRadius:10,padding:14,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:11,color:C.muted}}>Your contribution</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.black,fontFamily:"'DM Mono',monospace"}}>{fmt(example)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:11,color:C.muted}}>Gross profit share (min)</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.black,fontFamily:"'DM Mono',monospace"}}>+{fmt(minShare)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:11,color:C.red}}>Platform fee (8% of profit)</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.red,fontFamily:"'DM Mono',monospace"}}>-{fmt(platformCut8min)}</span>
+            </div>
+            <div style={{height:1,background:C.border,marginBottom:8}}/>
+            <div style={{display:"flex",justifyContent:"space-between"}}>
+              <span style={{fontSize:12,fontWeight:700,color:C.green}}>Your net profit share</span>
+              <span style={{fontSize:14,fontWeight:900,color:C.green,fontFamily:"'DM Mono',monospace"}}>+{fmt(netMin)}</span>
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1,background:C.light,borderRadius:10,padding:12,textAlign:"center"}}>
+              <div style={{fontSize:9,color:C.muted,marginBottom:4,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif"}}>Min Return</div>
+              <div style={{fontSize:16,fontWeight:900,color:C.black,fontFamily:"'DM Mono',monospace"}}>+{fmt(netMin)}</div>
+              <div style={{fontSize:9,color:C.muted,marginTop:3}}>{m.min}% profit share</div>
+            </div>
+            <div style={{flex:1,background:C.goldP,border:`1px solid ${C.goldB}`,borderRadius:10,padding:12,textAlign:"center"}}>
+              <div style={{fontSize:9,color:C.muted,marginBottom:4,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif"}}>Max Return</div>
+              <div style={{fontSize:16,fontWeight:900,color:C.gold,fontFamily:"'DM Mono',monospace"}}>+{fmt(netMax)}</div>
+              <div style={{fontSize:9,color:C.muted,marginTop:3}}>{m.max}% profit share</div>
+            </div>
+          </div>
+
+          <div style={{marginTop:12,fontSize:10,color:C.muted,textAlign:"center",lineHeight:1.6}}>
+            All figures shown after Connectadon's 8% platform fee. Actual profit depends on final wholesale cost and selling price achieved.
+          </div>
+        </Card>
+
+        {/* Full margin table */}
+        <SLabel>All Category Rates — At a Glance</SLabel>
+        <Card style={{padding:"4px 0",marginBottom:16}}>
+          {MARGINS.map((m,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:i<MARGINS.length-1?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontSize:20,flexShrink:0}}>{m.emoji}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,fontWeight:600,color:C.black}}>{m.cat}</div>
+                <div style={{fontSize:10,color:C.muted,marginTop:1}}>{m.products.slice(0,3).join(", ")}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:13,fontWeight:900,color:C.gold,fontFamily:"'DM Mono',monospace"}}>{m.min}–{m.max}%</div>
+                <div style={{fontSize:9,color:C.muted}}>profit share</div>
+              </div>
+            </div>
+          ))}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POOL DETAIL — with cycle tracker, activity feed, receipt, supplier info
+// ─────────────────────────────────────────────────────────────────────────────
+function PoolDetailScreen({pool,onBack,onContrib}){
+  const [tab,setTab]=useState("overview");
+  const pct=Math.round((pool.funded/pool.target)*100);
+  const tabs=[{id:"overview",label:"Overview"},{id:"activity",label:"Activity"},{id:"receipt",label:"Receipt"},{id:"info",label:"Info"}];
+
+  return(
+    <div style={{minHeight:"100vh",background:C.white,fontFamily:"'Barlow',sans-serif",paddingBottom:100}}>
+      {/* Header */}
+      <div style={{background:C.black,padding:"0 0 0",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:3,background:C.gold}}/>
+        <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={onBack} style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.1)",border:"none",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",color:C.white}}>←</button>
+          <div><Logo size={13} light/></div>
+        </div>
+        <div style={{padding:"0 16px 20px",textAlign:"center"}}>
+          <div style={{fontSize:48,marginBottom:8}}>{pool.emoji}</div>
+          <h2 style={{fontSize:22,fontWeight:900,color:C.white,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:-0.3,marginBottom:10}}>{pool.name}</h2>
+          <div style={{display:"flex",justifyContent:"center",gap:7,marginBottom:14,flexWrap:"wrap"}}>
+            <Tag type="dark">{pool.cat}</Tag>
+            <Tag type="gold">+{pool.profit}% profit share</Tag>
+            <Tag type="dark">{pool.members} contributors</Tag>
+            <Tag type="dark">{pool.days}d left</Tag>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
+            <span style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>Pool progress</span>
+            <span style={{fontSize:11,color:C.white,fontFamily:"'DM Mono',monospace"}}>{fmt(pool.funded)} / {fmt(pool.target)}</span>
+          </div>
+          <Bar val={pool.funded} max={pool.target} color={C.green}/>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",marginTop:5,textAlign:"right"}}>{pct}% funded</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.white,position:"sticky",top:0,zIndex:10}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{flex:1,padding:"12px 4px",border:"none",background:"none",cursor:"pointer",fontSize:11,fontWeight:tab===t.id?800:500,color:tab===t.id?C.black:C.muted,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5,textTransform:"uppercase",borderBottom:tab===t.id?`2px solid ${C.gold}`:"2px solid transparent",transition:"all 0.2s"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{padding:"16px 16px 0"}}>
+        {/* OVERVIEW TAB */}
+        {tab==="overview"&&(
+          <div style={{animation:"fadeUp 0.3s ease both"}}>
+            {/* Stats */}
+            <div style={{display:"flex",gap:1,background:C.border,borderRadius:10,overflow:"hidden",marginBottom:16}}>
+              {[{l:"Min",v:fmt(pool.min)},{l:"Max",v:fmt(pool.max)},{l:"Profit Share",v:`+${pool.profit}%`,g:true}].map((s,i)=>(
+                <div key={i} style={{flex:1,background:s.g?C.goldP:C.white,padding:"12px 8px",textAlign:"center"}}>
+                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:4,fontFamily:"'Barlow Condensed',sans-serif"}}>{s.l}</div>
+                  <div style={{fontSize:14,fontWeight:900,color:s.g?C.gold:C.black,fontFamily:"'DM Mono',monospace"}}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Cycle Tracker */}
+            <SLabel>Cycle Stage</SLabel>
+            <Card style={{marginBottom:16}}>
+              {CYCLE_STAGES.map((stage,i)=>{
+                const done=i<pool.cycleStage;
+                const active=i===pool.cycleStage;
+                return(
+                  <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:i<CYCLE_STAGES.length-1?14:0}}>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+                      <div style={{width:28,height:28,borderRadius:"50%",background:done?C.green:active?C.black:C.light,border:`2px solid ${done?C.green:active?C.black:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:done?12:14,flexShrink:0,transition:"all 0.3s"}}>
+                        {done?<span style={{color:"#fff"}}>✓</span>:<span>{active?stage.icon:"○"}</span>}
+                      </div>
+                      {i<CYCLE_STAGES.length-1&&<div style={{width:2,height:14,background:done?C.green:C.light,marginTop:2}}/>}
+                    </div>
+                    <div style={{paddingTop:4}}>
+                      <div style={{fontSize:12,fontWeight:done?600:active?800:400,color:done?C.green:active?C.black:C.muted}}>{stage.label}</div>
+                      <div style={{fontSize:10,color:C.muted,marginTop:1}}>{stage.sub}</div>
+                    </div>
+                    {active&&<div style={{marginLeft:"auto",animation:"shimmer 1.5s infinite"}}><Tag type="gold">Current</Tag></div>}
+                  </div>
+                );
+              })}
+            </Card>
+
+            {/* 90-day guarantee */}
+            <div style={{background:C.black,borderRadius:14,padding:16,marginBottom:16,display:"flex",gap:12,alignItems:"center"}}>
+              <span style={{fontSize:28}}>🛡️</span>
+              <div>
+                <div style={{fontWeight:800,fontSize:13,color:C.gold,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",marginBottom:3}}>90-Day Money-Back Guarantee</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",lineHeight:1.5}}>If products don't sell within 90 days, your full contribution is returned. No conditions.</div>
+              </div>
+            </div>
+
+            {/* Platform fee notice */}
+            <Card style={{marginBottom:16,background:C.off}}>
+              <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:8,fontFamily:"'Barlow Condensed',sans-serif"}}>Fee Structure — Fully Transparent</div>
+              {[{l:"Your contribution",v:fmt(pool.min)+"+"},{l:"Gross profit share",v:`${pool.profit}% of your share`},{l:"Platform fee (8% of profit)",v:"Covers operations & sourcing"},{l:"Net profit to you",v:`${pool.profit-Math.round(pool.profit*0.08)}% net after fee`}].map((r,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<3?`1px solid ${C.border}`:"none"}}>
+                  <span style={{fontSize:11,color:i===3?C.green:C.muted}}>{r.l}</span>
+                  <span style={{fontSize:11,fontWeight:i===3?800:600,color:i===3?C.green:C.black}}>{r.v}</span>
+                </div>
+              ))}
+            </Card>
+          </div>
+        )}
+
+        {/* ACTIVITY FEED TAB */}
+        {tab==="activity"&&(
+          <div style={{animation:"fadeUp 0.3s ease both"}}>
+            <SLabel>Live Pool Activity</SLabel>
+            <div style={{display:"inline-flex",alignItems:"center",gap:6,background:C.greenP,border:`1px solid ${C.greenB}`,borderRadius:6,padding:"4px 10px",marginBottom:14}}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:C.green,animation:"pulse 2s infinite"}}/>
+              <span style={{fontSize:9,color:C.green,fontWeight:700,letterSpacing:1,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>Live Updates</span>
+            </div>
+            {pool.feed.map((f,i)=>(
+              <div key={i} style={{display:"flex",gap:12,marginBottom:12,animation:`feedIn 0.4s ${i*0.07}s ease both`}}>
+                <div style={{width:32,height:32,borderRadius:99,background:C.light,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{f.icon}</div>
+                <div style={{flex:1,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
+                  <div style={{fontSize:13,color:C.black,fontWeight:500,lineHeight:1.4}}>{f.event}</div>
+                  <div style={{fontSize:10,color:C.muted,marginTop:4}}>{f.time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* PURCHASE RECEIPT TAB */}
+        {tab==="receipt"&&(
+          <div style={{animation:"fadeUp 0.3s ease both"}}>
+            <SLabel>Purchase Transparency</SLabel>
+            {pool.receipt?(
+              <>
+                <div style={{background:C.greenP,border:`1px solid ${C.greenB}`,borderRadius:10,padding:12,marginBottom:14,display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:16}}>✅</span>
+                  <div style={{fontSize:12,color:C.green,fontWeight:600}}>Wholesale purchase verified and completed</div>
+                </div>
+                <Card style={{marginBottom:14}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:14,color:C.black,textTransform:"uppercase",letterSpacing:-0.3,marginBottom:12,borderBottom:`1px solid ${C.border}`,paddingBottom:10}}>Purchase Receipt</div>
+                  {[
+                    {l:"Date",v:pool.receipt.date},
+                    {l:"Supplier",v:pool.receipt.supplier},
+                    {l:"Reference",v:pool.receipt.ref},
+                    {l:"Items Purchased",v:pool.receipt.items},
+                    {l:"Total Wholesale Cost",v:pool.receipt.wholesaleCost,bold:true,green:false},
+                  ].map((r,i)=>(
+                    <div key={i} style={{display:"flex",flexDirection:"column",padding:"8px 0",borderBottom:i<4?`1px solid ${C.border}`:"none"}}>
+                      <span style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif",marginBottom:3}}>{r.l}</span>
+                      <span style={{fontSize:12,fontWeight:r.bold?900:500,color:C.black,fontFamily:r.bold?"'DM Mono',monospace":"inherit"}}>{r.v}</span>
+                    </div>
+                  ))}
+                </Card>
+                <div style={{background:C.off,borderRadius:10,padding:12,fontSize:11,color:C.muted,lineHeight:1.6}}>
+                  Full invoice available to all contributors via email request. Sensitive business details redacted to protect supplier relationships. Reference number verifiable against Connectadon FNB account.
+                </div>
+              </>
+            ):(
+              <div style={{textAlign:"center",padding:"40px 0"}}>
+                <div style={{fontSize:36,marginBottom:10}}>⏳</div>
+                <div style={{fontWeight:700,fontSize:14,color:C.black,marginBottom:6}}>No receipt yet</div>
+                <div style={{fontSize:12,color:C.muted,lineHeight:1.6}}>Purchase receipt will appear here once the pool reaches its target and wholesale purchase is completed.</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* INFO TAB */}
+        {tab==="info"&&(
+          <div style={{animation:"fadeUp 0.3s ease both"}}>
+            <SLabel>Supplier Information</SLabel>
+            <Card style={{marginBottom:14}}>
+              <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
+                <span style={{fontSize:22}}>🏭</span>
+                <div>
+                  <div style={{fontWeight:700,fontSize:13,color:C.black,marginBottom:3}}>{pool.supplier}</div>
+                  <Tag type="green">Verified Supplier</Tag>
+                </div>
+              </div>
+              <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>All Connectadon suppliers are verified through business registration checks, sample order reviews, and delivery history. We only work with suppliers who have passed our vetting process.</div>
+            </Card>
+
+            <SLabel>Profit Share Structure</SLabel>
+            <Card style={{marginBottom:14}}>
+              {[
+                {l:"Category",v:pool.cat},
+                {l:"Profit Share Rate",v:`${pool.profit}% of your proportional share`,bold:true},
+                {l:"Platform Fee",v:"8% deducted from gross profit"},
+                {l:"Your Net Rate",v:`${pool.profit-Math.round(pool.profit*0.08)}% net profit share`,bold:true,green:true},
+                {l:"Payout Timeline",v:"Within 48 hours of cycle close"},
+                {l:"Guarantee",v:"90-day money-back guarantee"},
+              ].map((r,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:i<5?`1px solid ${C.border}`:"none",flexWrap:"wrap",gap:4}}>
+                  <span style={{fontSize:11,color:C.muted}}>{r.l}</span>
+                  <span style={{fontSize:11,fontWeight:r.bold?800:500,color:r.green?C.green:C.black}}>{r.v}</span>
+                </div>
+              ))}
+            </Card>
+
+            <SLabel>Connectadon Business Details</SLabel>
+            <Card style={{marginBottom:14,background:C.off}}>
+              {[
+                {l:"Registered Name",v:"Connectadon (Pty) Ltd"},
+                {l:"CIPC Registration",v:"2024/XXXXXX/07"},
+                {l:"Business Bank",v:"FNB Gold Business Account"},
+                {l:"Pool Funds Account",v:"Separate ring-fenced account"},
+                {l:"Reserve Fund",v:"Maintained for contributor protection"},
+              ].map((r,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:i<4?`1px solid ${C.border}`:"none",flexWrap:"wrap",gap:4}}>
+                  <span style={{fontSize:11,color:C.muted}}>{r.l}</span>
+                  <span style={{fontSize:11,fontWeight:600,color:C.black,textAlign:"right"}}>{r.v}</span>
+                </div>
+              ))}
+            </Card>
+          </div>
+        )}
+      </div>
+
+      {/* Fixed contribute button */}
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,padding:"12px 16px",background:"rgba(255,255,255,0.97)",borderTop:`1px solid ${C.border}`,backdropFilter:"blur(20px)"}}>
+        <BlackBtn onClick={onContrib}>Contribute to This Pool →</BlackBtn>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTRIBUTION FLOW
+// ─────────────────────────────────────────────────────────────────────────────
+function ContribScreen({pool,onBack,onDone}){
+  const [amount,setAmount]=useState("");
+  const [joined,setJoined]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const est=amount&&Number(amount)>=pool.min?Math.round(Number(amount)*(pool.profit/100)):null;
+  const platformFee=est?Math.round(est*0.08):null;
+  const netShare=est?est-platformFee:null;
+
+  if(joined) return(
+    <div style={{minHeight:"100vh",background:C.white,fontFamily:"'Barlow',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 24px",textAlign:"center"}}>
+      <div style={{width:72,height:72,borderRadius:20,background:C.greenP,border:`2px solid ${C.greenB}`,margin:"0 auto 20px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,animation:"pop 0.5s ease both"}}>🎉</div>
+      <div style={{fontWeight:900,fontSize:22,color:C.green,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",marginBottom:8}}>You're In the Pool!</div>
+      <div style={{fontSize:28,fontWeight:900,color:C.black,fontFamily:"'DM Mono',monospace",marginBottom:6}}>{fmt(amount)}</div>
+      <div style={{fontSize:12,color:C.muted,marginBottom:20,lineHeight:1.7}}>
+        Contributed to <strong style={{color:C.black}}>{pool.name}</strong><br/>
+        Est. gross profit share: <strong style={{color:C.gold}}>+{est?fmt(est):"—"}</strong><br/>
+        Platform fee (8%): <strong style={{color:C.red}}>-{platformFee?fmt(platformFee):"—"}</strong><br/>
+        Est. net profit share: <strong style={{color:C.green}}>+{netShare?fmt(netShare):"—"}</strong>
+      </div>
+      <div style={{background:C.off,borderRadius:12,padding:14,marginBottom:20,width:"100%",textAlign:"left"}}>
+        <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:8,fontFamily:"'Barlow Condensed',sans-serif"}}>Your 90-Day Guarantee is Active</div>
+        <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>If products don't sell within 90 days, your {fmt(amount)} contribution is fully returned to your balance.</div>
+      </div>
+      <BlackBtn onClick={onDone} style={{maxWidth:200}}>Done</BlackBtn>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:C.white,fontFamily:"'Barlow',sans-serif",padding:"20px 16px",paddingBottom:40}}>
+      <BackBtn onBack={onBack}/>
+      <div style={{background:C.black,borderRadius:16,padding:20,textAlign:"center",marginBottom:16,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:3,background:C.gold}}/>
+        <div style={{fontSize:40,marginBottom:8}}>{pool.emoji}</div>
+        <div style={{fontWeight:900,fontSize:18,color:C.white,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",marginBottom:6}}>{pool.name}</div>
+        <div style={{display:"flex",justifyContent:"center",gap:6}}>
+          <Tag type="gold">+{pool.profit}% profit share</Tag>
+          <Tag type="dark">{pool.days}d left</Tag>
+        </div>
+      </div>
+
+      <Card style={{marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:13,color:C.black,marginBottom:3}}>Your Contribution</div>
+        <div style={{fontSize:11,color:C.muted,marginBottom:12}}>Min {fmt(pool.min)} · Max {fmt(pool.max)}</div>
+        <div style={{position:"relative",marginBottom:10}}>
+          <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:C.muted,fontSize:14,fontWeight:700}}>R</span>
+          <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00"
+            style={{width:"100%",background:C.light,border:`1.5px solid ${amount&&Number(amount)>=pool.min?C.green:C.border}`,borderRadius:10,padding:"13px 13px 13px 28px",fontSize:22,color:C.black,fontFamily:"'DM Mono',monospace",outline:"none",transition:"border-color 0.2s"}}/>
+        </div>
+        <div style={{display:"flex",gap:7,marginBottom:12}}>
+          {[pool.min,1000,2500,pool.max].filter((v,i,a)=>a.indexOf(v)===i).map(v=>(
+            <button key={v} onClick={()=>setAmount(String(v))} style={{flex:1,background:Number(amount)===v?C.black:C.white,border:`1px solid ${Number(amount)===v?C.black:C.border}`,borderRadius:7,padding:"7px 3px",fontSize:10,color:Number(amount)===v?C.white:C.muted,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{fmt(v)}</button>
+          ))}
+        </div>
+
+        {est&&(
+          <div style={{background:C.light,borderRadius:10,padding:12,marginBottom:12,animation:"fadeUp 0.2s ease both"}}>
+            <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:8,fontFamily:"'Barlow Condensed',sans-serif"}}>Profit Calculation</div>
+            {[
+              {l:"Gross profit share",v:`+${fmt(est)}`,color:C.black},
+              {l:"Platform fee (8%)",v:`-${fmt(platformFee)}`,color:C.red},
+            ].map((r,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:i<1?`1px solid ${C.border}`:"none"}}>
+                <span style={{fontSize:11,color:C.muted}}>{r.l}</span>
+                <span style={{fontSize:11,fontWeight:700,color:r.color,fontFamily:"'DM Mono',monospace"}}>{r.v}</span>
+              </div>
+            ))}
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
+              <span style={{fontSize:12,fontWeight:700,color:C.green}}>Your net profit share</span>
+              <span style={{fontSize:16,fontWeight:900,color:C.green,fontFamily:"'DM Mono',monospace"}}>+{fmt(netShare)}</span>
+            </div>
+          </div>
+        )}
+
+        <BlackBtn disabled={!amount||Number(amount)<pool.min||loading}
+          onClick={()=>{if(!amount||Number(amount)<pool.min||loading)return;setLoading(true);setTimeout(()=>{setLoading(false);setJoined(true);},1800);}}>
+          {loading&&<Spin/>}{loading?"Processing…":"Confirm Contribution"}
+        </BlackBtn>
+      </Card>
+
+      <div style={{background:C.goldP,border:`1px solid ${C.goldB}`,borderRadius:10,padding:12,display:"flex",gap:8,alignItems:"flex-start"}}>
+        <span style={{fontSize:16}}>🛡️</span>
+        <div style={{fontSize:11,color:C.muted,lineHeight:1.6}}>Your contribution is backed by the <strong style={{color:C.black}}>90-day guarantee</strong>. If products don't sell within 90 days, your full amount is returned to your balance automatically.</div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+function NotifScreen({onBack,notifs,setNotifs}){
+  const unread=notifs.filter(n=>!n.read).length;
+  return(
+    <div style={{minHeight:"100vh",background:C.white,padding:"20px 16px",fontFamily:"'Barlow',sans-serif"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={onBack} style={{width:34,height:34,borderRadius:9,background:C.light,border:"none",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:20,color:C.black,textTransform:"uppercase",letterSpacing:-0.3}}>Notifications</span>
+          {unread>0&&<div style={{background:C.red,color:"#fff",borderRadius:99,padding:"2px 7px",fontSize:10,fontWeight:800,animation:"pop 0.4s ease both"}}>{unread}</div>}
+        </div>
+        {unread>0&&<button onClick={()=>setNotifs(notifs.map(n=>({...n,read:true})))} style={{background:"none",border:"none",color:C.black,fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"underline"}}>Mark all read</button>}
+      </div>
+      {notifs.map((n,i)=>(
+        <div key={n.id} onClick={()=>setNotifs(notifs.map(x=>x.id===n.id?{...x,read:true}:x))}
+          style={{display:"flex",gap:12,padding:"13px 14px",marginBottom:8,background:n.read?C.white:C.off,border:`1px solid ${n.read?C.border:C.black}`,borderRadius:13,cursor:"pointer",animation:`fadeUp 0.4s ${i*0.05}s ease both`,position:"relative",overflow:"hidden"}}>
+          {!n.read&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:C.black}}/>}
+          <div style={{width:40,height:40,borderRadius:10,background:C.light,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{n.icon}</div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:n.read?500:700,fontSize:13,color:C.black,marginBottom:3}}>{n.title}</div>
+            <div style={{fontSize:11,color:C.muted,lineHeight:1.5}}>{n.body}</div>
+            <div style={{fontSize:10,color:C.muted,marginTop:4,fontWeight:600}}>{n.time}</div>
+          </div>
+          {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:C.black,flexShrink:0,marginTop:4}}/>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS
+// ─────────────────────────────────────────────────────────────────────────────
+function AnalyticsScreen({onBack}){
+  const [period,setPeriod]=useState("7D");
+  const [metric,setMetric]=useState("profit");
+  const [chartType,setChartType]=useState("area");
+  const periods=["1D","7D","1M","3M","1Y"];
+  const data=CHART_DATA[period];
+  const metrics=[
+    {key:"sales",label:"Pool Sales",color:C.black,value:data.reduce((a,d)=>a+d.sales,0)},
+    {key:"profit",label:"Profit Shared",color:C.gold,value:data.reduce((a,d)=>a+d.profit,0)},
+    {key:"contributions",label:"Contributions",color:C.green,value:data.reduce((a,d)=>a+d.contributions,0)},
+  ];
+  const am=metrics.find(m=>m.key===metric);
+
+  const renderChart=()=>{
+    const props={data,margin:{top:5,right:0,left:0,bottom:0}};
+    const common={type:"monotone",dataKey:metric,stroke:am.color,strokeWidth:2.5,dot:false};
+    if(chartType==="bar") return(<BarChart {...props}><CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/><XAxis dataKey="t" tick={{fontSize:9,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false}/><YAxis tickFormatter={v=>fmtK(v)} tick={{fontSize:9,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false} width={38}/><Tooltip content={<ChartTip/>}/><Bar dataKey={metric} fill={am.color} radius={[4,4,0,0]} name={am.label}/></BarChart>);
+    if(chartType==="line") return(<LineChart {...props}><CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/><XAxis dataKey="t" tick={{fontSize:9,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false}/><YAxis tickFormatter={v=>fmtK(v)} tick={{fontSize:9,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false} width={38}/><Tooltip content={<ChartTip/>}/><Line {...common} activeDot={{r:4}}/></LineChart>);
+    return(<AreaChart {...props}><defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={am.color} stopOpacity={0.15}/><stop offset="95%" stopColor={am.color} stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/><XAxis dataKey="t" tick={{fontSize:9,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false}/><YAxis tickFormatter={v=>fmtK(v)} tick={{fontSize:9,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false} width={38}/><Tooltip content={<ChartTip/>}/><Area {...common} fill="url(#ag)" name={am.label}/></AreaChart>);
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:C.white,fontFamily:"'Barlow',sans-serif",paddingBottom:40}}>
+      <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,background:C.white,zIndex:10}}>
+        <button onClick={onBack} style={{width:32,height:32,borderRadius:8,background:C.light,border:"none",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+        <div><Logo size={14}/><div style={{fontSize:8,color:C.muted,letterSpacing:1.5,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif"}}>Pool Analytics</div></div>
+      </div>
+      <div style={{padding:"16px 16px 0"}}>
+        <div style={{display:"flex",background:C.light,borderRadius:10,padding:3,marginBottom:16}}>
+          {periods.map(p=><button key={p} onClick={()=>setPeriod(p)} style={{flex:1,padding:"8px 4px",borderRadius:8,border:"none",background:period===p?C.black:"transparent",color:period===p?C.white:C.muted,fontSize:11,fontWeight:period===p?800:500,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5,transition:"all 0.2s"}}>{p}</button>)}
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          {metrics.map(m=>(
+            <div key={m.key} onClick={()=>setMetric(m.key)} style={{flex:1,background:metric===m.key?C.black:C.white,border:`1.5px solid ${metric===m.key?C.black:C.border}`,borderRadius:12,padding:"10px 8px",textAlign:"center",cursor:"pointer",transition:"all 0.2s"}}>
+              <div style={{fontSize:8,color:metric===m.key?"rgba(255,255,255,0.5)":C.muted,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif",marginBottom:4}}>{m.label}</div>
+              <div style={{fontSize:13,fontWeight:900,color:metric===m.key?m.color:C.black,fontFamily:"'DM Mono',monospace"}}>{fmtK(m.value)}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:6,marginBottom:12,justifyContent:"flex-end"}}>
+          {[{k:"area",icon:"📈"},{k:"bar",icon:"📊"},{k:"line",icon:"📉"}].map(t=>(
+            <button key={t.k} onClick={()=>setChartType(t.k)} style={{width:30,height:30,borderRadius:7,background:chartType===t.k?C.black:C.light,border:"none",fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{t.icon}</button>
+          ))}
+        </div>
+        <Card style={{marginBottom:16,padding:"16px 8px 12px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,padding:"0 8px"}}>
+            <div>
+              <div style={{fontSize:10,color:C.muted,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase",marginBottom:2}}>{am.label} · {period}</div>
+              <div style={{fontSize:20,fontWeight:900,color:C.black,fontFamily:"'DM Mono',monospace"}}>{fmt(am.value)}</div>
+            </div>
+            <div style={{background:C.greenP,border:`1px solid ${C.greenB}`,borderRadius:6,padding:"4px 10px"}}><span style={{fontSize:11,fontWeight:800,color:C.green}}>↑ 24%</span></div>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>{renderChart()}</ResponsiveContainer>
+        </Card>
+        {/* Multi-metric chart */}
+        <Card style={{marginBottom:16,padding:"16px 8px 12px"}}>
+          <div style={{padding:"0 8px",marginBottom:10}}>
+            <div style={{fontSize:10,color:C.muted,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6}}>All Metrics · {period}</div>
+            <div style={{display:"flex",gap:12}}>
+              {metrics.map(m=><div key={m.key} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:"50%",background:m.color}}/><span style={{fontSize:9,color:C.muted,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5,textTransform:"uppercase"}}>{m.label}</span></div>)}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={140}>
+            <AreaChart data={data} margin={{top:5,right:0,left:0,bottom:0}}>
+              <defs>{metrics.map(m=><linearGradient key={m.key} id={`g_${m.key}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={m.color} stopOpacity={0.1}/><stop offset="95%" stopColor={m.color} stopOpacity={0}/></linearGradient>)}</defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+              <XAxis dataKey="t" tick={{fontSize:8,fill:C.muted}} axisLine={false} tickLine={false}/>
+              <Tooltip content={<ChartTip/>}/>
+              {metrics.map(m=><Area key={m.key} type="monotone" dataKey={m.key} stroke={m.color} strokeWidth={1.5} fill={`url(#g_${m.key})`} dot={false} name={m.label}/>)}
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+        {/* Pie */}
+        <Card style={{marginBottom:16}}>
+          <SLabel>Pool Contribution Breakdown</SLabel>
+          <div style={{display:"flex",alignItems:"center",gap:16}}>
+            <ResponsiveContainer width={130} height={130}>
+              <PieChart><Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={3} dataKey="value">{PIE_DATA.map((e,i)=><Cell key={i} fill={e.color}/>)}</Pie><Tooltip formatter={(v)=>[fmt(v),"Contributed"]}/></PieChart>
+            </ResponsiveContainer>
+            <div style={{flex:1}}>
+              {PIE_DATA.map((p,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:i<PIE_DATA.length-1?8:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0}}/><span style={{fontSize:10,color:C.black,fontWeight:600}}>{p.name}</span></div>
+                  <span style={{fontSize:10,color:C.muted,fontFamily:"'DM Mono',monospace"}}>{fmtK(p.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+        {/* Key stats grid */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {[{l:"Total Members",v:"1,240+",c:C.black},{l:"Avg Profit Share",v:"31.4%",c:C.gold},{l:"Pools Completed",v:"34",c:C.green},{l:"Avg Payout Time",v:"<48 hrs",c:C.muted}].map((s,i)=>(
+            <Card key={i} style={{textAlign:"center"}}>
+              <div style={{fontSize:9,color:C.muted,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase",marginBottom:6,fontFamily:"'Barlow Condensed',sans-serif"}}>{s.l}</div>
+              <div style={{fontSize:20,fontWeight:900,color:s.c,fontFamily:"'DM Mono',monospace",marginBottom:4}}>{s.v}</div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POOL HOME
+// ─────────────────────────────────────────────────────────────────────────────
+function PoolHome({setPoolTab,setSubScreen}){
+  return(
+    <div style={{padding:"0 0 24px",animation:"fadeUp 0.5s ease both",fontFamily:"'Barlow',sans-serif"}}>
+      <div style={{background:C.black,padding:"32px 22px 38px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:2,background:C.gold}}/>
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(0,200,83,0.12)",border:"1px solid rgba(0,200,83,0.25)",borderRadius:6,padding:"4px 11px",marginBottom:18}}>
+          <div style={{width:5,height:5,borderRadius:"50%",background:C.green,animation:"pulse 2s infinite"}}/>
+          <span style={{fontSize:9,color:C.green,fontWeight:700,letterSpacing:1.5,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>5 Active Buying Pools</span>
+        </div>
+        <h1 style={{fontSize:30,fontWeight:900,color:C.white,lineHeight:1.1,marginBottom:12,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:-0.5}}>
+          Contribute Together.<br/><span style={{color:C.gold}}>Share the Profit.</span>
+        </h1>
+        <p style={{fontSize:12,color:"rgba(255,255,255,0.45)",lineHeight:1.7,marginBottom:20,maxWidth:290}}>Pool your buying power. Connectadon sources and sells products. Everyone gets their fair share — transparently.</p>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <button onClick={()=>setPoolTab("pools")} style={{background:C.gold,color:C.black,border:"none",borderRadius:9,padding:"12px 20px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1,textTransform:"uppercase"}}>Browse Pools →</button>
+          <button onClick={()=>setSubScreen("breakdown")} style={{background:"transparent",border:"1px solid rgba(255,255,255,0.2)",borderRadius:9,padding:"12px 14px",fontSize:11,fontWeight:700,cursor:"pointer",color:"rgba(255,255,255,0.6)",fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>📊 Profit Rates</button>
+          <button onClick={()=>setSubScreen("analytics")} style={{background:"transparent",border:"1px solid rgba(255,255,255,0.2)",borderRadius:9,padding:"12px 14px",fontSize:11,fontWeight:700,cursor:"pointer",color:"rgba(255,255,255,0.6)",fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>📈 Analytics</button>
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:1,background:C.border,margin:"0 0 22px"}}>
+        {[{l:"Members",v:"1,240+"},{l:"Profit Shared",v:"R890K+"},{l:"Completed",v:"34",g:true}].map((s,i)=>(
+          <div key={i} style={{flex:1,background:s.g?C.greenP:C.white,padding:"15px 10px",textAlign:"center"}}>
+            <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:5,fontFamily:"'Barlow Condensed',sans-serif"}}>{s.l}</div>
+            <div style={{fontSize:16,fontWeight:900,color:s.g?C.green:C.black,fontFamily:"'DM Mono',monospace"}}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick analytics */}
+      <div style={{padding:"0 16px",marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <SLabel style={{marginBottom:0}}>This Week's Performance</SLabel>
+          <button onClick={()=>setSubScreen("analytics")} style={{fontSize:10,color:C.black,fontWeight:700,background:"transparent",border:"none",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",textDecoration:"underline"}}>Full Analytics →</button>
+        </div>
+        <Card style={{padding:"14px 10px"}}>
+          <ResponsiveContainer width="100%" height={90}>
+            <AreaChart data={CHART_DATA["7D"]} margin={{top:5,right:0,left:0,bottom:0}}>
+              <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.gold} stopOpacity={0.2}/><stop offset="95%" stopColor={C.gold} stopOpacity={0}/></linearGradient></defs>
+              <XAxis dataKey="t" tick={{fontSize:8,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false}/>
+              <Tooltip content={<ChartTip/>}/>
+              <Area type="monotone" dataKey="profit" stroke={C.gold} strokeWidth={2} fill="url(#hg)" dot={false} name="Profit Shared"/>
+            </AreaChart>
+          </ResponsiveContainer>
+          <div style={{display:"flex",justifyContent:"space-between",padding:"8px 4px 0",borderTop:`1px solid ${C.border}`,marginTop:8}}>
+            {[{l:"Pool Sales",v:"R117K"},{l:"Profit Shared",v:"R32K",g:true},{l:"New Members",v:"+47"}].map((s,i)=>(
+              <div key={i} style={{textAlign:"center"}}>
+                <div style={{fontSize:9,color:C.muted,marginBottom:2}}>{s.l}</div>
+                <div style={{fontSize:13,fontWeight:900,color:s.g?C.gold:C.black,fontFamily:"'DM Mono',monospace"}}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Transparency badge */}
+      <div style={{padding:"0 16px",marginBottom:20}}>
+        <div style={{background:C.off,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:11,color:C.black,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>Connectadon Transparency Promise</div>
+          {[
+            {icon:"📄",t:"Purchase receipts visible",s:"Every wholesale purchase documented and viewable by contributors"},
+            {icon:"📊",t:"Live pool activity feed",s:"Real-time updates on contributions, purchases and sales"},
+            {icon:"💸",t:"Fee published openly",s:"8% platform fee on profit — no hidden charges, ever"},
+            {icon:"🏦",t:"Ring-fenced pool funds",s:"Your money held in a separate FNB Gold business account"},
+            {icon:"🛡️",t:"90-day money-back guarantee",s:"Full contribution returned if products don't sell in 90 days"},
+            {icon:"✅",t:"Verified suppliers only",s:"All suppliers vetted through business registration checks"},
+          ].map((t,i)=>(
+            <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:i<5?10:0}}>
+              <span style={{fontSize:16,flexShrink:0}}>{t.icon}</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:C.black}}>{t.t}</div>
+                <div style={{fontSize:10,color:C.muted,lineHeight:1.4,marginTop:1}}>{t.s}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"0 16px",marginBottom:22}}>
+        <SLabel>How It Works</SLabel>
+        {[
+          {n:"01",i:"🤝",t:"Contribute",d:"Join a buying pool from as little as R250. No experience needed."},
+          {n:"02",i:"🛒",t:"We Source & Sell",d:"Connectadon buys products in bulk at wholesale and sells through active markets."},
+          {n:"03",i:"💰",t:"Receive Your Share",d:"Profit shared with all contributors within 48hrs of cycle close, after our 8% fee."},
+        ].map((s,i)=>(
+          <div key={i} style={{display:"flex",gap:12,marginBottom:14,alignItems:"flex-start"}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:20,color:C.gold,flexShrink:0,width:28,lineHeight:1.1}}>{s.n}</div>
+            <div style={{width:38,height:38,borderRadius:11,background:C.light,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{s.i}</div>
+            <div><div style={{fontWeight:700,fontSize:13,color:C.black,marginBottom:2}}>{s.t}</div><div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>{s.d}</div></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POOLS LIST
+// ─────────────────────────────────────────────────────────────────────────────
+function PoolsList(){
+  const [search,setSearch]=useState("");
+  const [sel,setSel]=useState(null);
+  const [showContrib,setShowContrib]=useState(false);
+  const filtered=POOLS.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
+
+  if(showContrib&&sel) return <ContribScreen pool={sel} onBack={()=>setShowContrib(false)} onDone={()=>{setShowContrib(false);setSel(null);}}/>;
+  if(sel) return <PoolDetailScreen pool={sel} onBack={()=>setSel(null)} onContrib={()=>setShowContrib(true)}/>;
+
+  return(
+    <div style={{padding:"20px 16px 0",fontFamily:"'Barlow',sans-serif"}}>
+      <div style={{position:"relative",marginBottom:14}}>
+        <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:C.muted}}>⌕</span>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search buying pools…"
+          style={{width:"100%",background:C.light,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 11px 11px 34px",fontSize:13,color:C.black,outline:"none",fontFamily:"'Barlow',sans-serif"}}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:14}}>
+        <div style={{width:22,height:22,borderRadius:6,background:C.black,color:C.gold,fontSize:11,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Barlow Condensed',sans-serif"}}>{filtered.length}</div>
+        <span style={{fontSize:10,color:C.muted,fontWeight:700,letterSpacing:1,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif"}}>Active Buying Pools</span>
+      </div>
+      {filtered.map((pool,i)=>{
+        const pct=Math.round((pool.funded/pool.target)*100);
+        const stage=CYCLE_STAGES[pool.cycleStage];
+        return(
+          <div key={pool.id} onClick={()=>setSel(pool)}
+            style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:16,marginBottom:11,cursor:"pointer",animation:`fadeUp 0.4s ${i*0.07}s ease both`,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:pct>80?C.gold:C.border}}/>
+            <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:12,paddingLeft:8}}>
+              <div style={{width:48,height:48,borderRadius:12,background:C.light,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{pool.emoji}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:800,fontSize:15,color:C.black,marginBottom:5,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:-0.2}}>{pool.name}</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <Tag>{pool.cat}</Tag>
+                  <Tag type="gold">+{pool.profit}% profit share</Tag>
+                  <Tag type="green" size="small">{stage.icon} {stage.label}</Tag>
+                </div>
+              </div>
+            </div>
+            <div style={{paddingLeft:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontSize:11,color:C.muted}}>{fmt(pool.funded)} contributed</span><span style={{fontSize:11,color:C.black,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{pct}%</span></div>
+              <Bar val={pool.funded} max={pool.target} color={C.green}/>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:12,alignItems:"center"}}>
+                <div>
+                  <span style={{fontSize:11,color:C.muted}}>{pool.members} contributors · {pool.days}d left</span>
+                  <div style={{fontSize:9,color:C.muted,marginTop:2}}>🛡️ 90-day guarantee · 8% platform fee</div>
+                </div>
+                <button style={{background:C.black,color:C.gold,border:"none",borderRadius:7,padding:"7px 14px",fontSize:10,fontWeight:800,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5,textTransform:"uppercase"}}>Details →</button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EARNINGS
+// ─────────────────────────────────────────────────────────────────────────────
+function EarningsScreen({setSubScreen}){
+  const [period,setPeriod]=useState("7D");
+  const periods=["1D","7D","1M","3M","1Y"];
+  const data=CHART_DATA[period];
+  const totalProfit=data.reduce((a,d)=>a+d.profit,0);
+
+  return(
+    <div style={{padding:"20px 16px",fontFamily:"'Barlow',sans-serif"}}>
+      <div style={{display:"flex",background:C.light,borderRadius:10,padding:3,marginBottom:18}}>
+        {periods.map(p=><button key={p} onClick={()=>setPeriod(p)} style={{flex:1,padding:"8px 4px",borderRadius:8,border:"none",background:period===p?C.black:"transparent",color:period===p?C.white:C.muted,fontSize:11,fontWeight:period===p?800:500,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:0.5,transition:"all 0.2s"}}>{p}</button>)}
+      </div>
+      <div style={{display:"flex",gap:1,background:C.border,borderRadius:11,overflow:"hidden",marginBottom:16}}>
+        {[{l:"Pool Sales",v:fmt(data.reduce((a,d)=>a+d.sales,0))},{l:"Profit Shared",v:fmt(totalProfit),g:true},{l:"Contributions",v:fmt(data.reduce((a,d)=>a+d.contributions,0))}].map((s,i)=>(
+          <div key={i} style={{flex:1,background:s.g?C.goldP:C.white,padding:"12px 6px",textAlign:"center"}}>
+            <div style={{fontSize:8,color:C.muted,fontWeight:700,letterSpacing:0.5,textTransform:"uppercase",marginBottom:4,fontFamily:"'Barlow Condensed',sans-serif"}}>{s.l}</div>
+            <div style={{fontSize:11,fontWeight:900,color:s.g?C.gold:C.black,fontFamily:"'DM Mono',monospace"}}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+      <Card style={{marginBottom:14,padding:"14px 8px 12px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,padding:"0 6px"}}>
+          <div>
+            <div style={{fontSize:10,color:C.muted,fontWeight:600,letterSpacing:0.5,textTransform:"uppercase",marginBottom:2}}>Profit Shared · {period}</div>
+            <div style={{fontSize:18,fontWeight:900,color:C.gold,fontFamily:"'DM Mono',monospace"}}>{fmt(totalProfit)}</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <div style={{background:C.greenP,border:`1px solid ${C.greenB}`,borderRadius:6,padding:"4px 10px"}}><span style={{fontSize:10,fontWeight:800,color:C.green}}>↑ 24%</span></div>
+            <button onClick={()=>setSubScreen("analytics")} style={{background:C.light,border:"none",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,color:C.black,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif"}}>Full →</button>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={140}>
+          <AreaChart data={data} margin={{top:5,right:0,left:0,bottom:0}}>
+            <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.gold} stopOpacity={0.2}/><stop offset="95%" stopColor={C.gold} stopOpacity={0}/></linearGradient></defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+            <XAxis dataKey="t" tick={{fontSize:8,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false}/>
+            <YAxis tickFormatter={v=>fmtK(v)} tick={{fontSize:8,fill:C.muted,fontFamily:"'DM Mono',monospace"}} axisLine={false} tickLine={false} width={36}/>
+            <Tooltip content={<ChartTip/>}/>
+            <Area type="monotone" dataKey="profit" stroke={C.gold} strokeWidth={2.5} fill="url(#pg)" dot={false} name="Profit Shared"/>
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <SLabel style={{marginBottom:0}}>My Active Contributions</SLabel>
+      </div>
+      {MY_POOLS.map(p=>(
+        <Card key={p.id} style={{marginBottom:11}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
+            <div style={{display:"flex",gap:11,alignItems:"center"}}>
+              <div style={{width:38,height:38,borderRadius:11,background:C.light,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{p.emoji}</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:13,color:C.black}}>{p.name}</div>
+                <div style={{fontSize:11,color:C.muted,marginTop:1}}>Contributed: <span style={{color:C.black,fontFamily:"'DM Mono',monospace",fontWeight:600}}>{fmt(p.contributed)}</span></div>
+              </div>
+            </div>
+            <Tag type={p.status==="paid"?"green":"dark"}>{p.status==="paid"?"Paid Out":"Active"}</Tag>
+          </div>
+          <div style={{background:C.light,borderRadius:9,padding:"10px 12px",marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:10,color:C.muted}}>Gross profit share ({p.profit}%)</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.black,fontFamily:"'DM Mono',monospace"}}>+{fmt(p.share)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:10,color:C.red}}>Platform fee (8%)</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.red,fontFamily:"'DM Mono',monospace"}}>-{fmt(Math.round(p.share*0.08))}</span>
+            </div>
+            <div style={{height:1,background:C.border,marginBottom:4}}/>
+            <div style={{display:"flex",justifyContent:"space-between"}}>
+              <span style={{fontSize:11,fontWeight:700,color:C.green}}>Net profit share</span>
+              <span style={{fontSize:13,fontWeight:900,color:C.green,fontFamily:"'DM Mono',monospace"}}>+{fmt(p.share-Math.round(p.share*0.08))}</span>
+            </div>
+          </div>
+        </Card>
+      ))}
+
+      <SLabel>Contribution History</SLabel>
+      {HISTORY.map((h,i)=>(
+        <Card key={h.id} style={{marginBottom:10,animation:`fadeUp 0.4s ${i*0.06}s ease both`}}>
+          <div style={{display:"flex",gap:11,alignItems:"center",marginBottom:10}}>
+            <div style={{width:38,height:38,borderRadius:11,background:C.light,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{h.emoji}</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:13,color:C.black}}>{h.name}</div>
+              <div style={{fontSize:10,color:C.muted,marginTop:1}}>Joined {h.date}</div>
+            </div>
+            <Tag type={h.status==="paid"?"green":"dark"}>{h.status==="paid"?"Paid Out":"Active"}</Tag>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <div style={{flex:1,background:C.light,borderRadius:8,padding:"8px 10px"}}><div style={{fontSize:9,color:C.muted,marginBottom:2}}>Contributed</div><div style={{fontSize:12,fontWeight:800,color:C.black,fontFamily:"'DM Mono',monospace"}}>{fmt(h.contributed)}</div></div>
+            <div style={{flex:1,background:h.status==="paid"?C.greenP:C.goldP,border:`1px solid ${h.status==="paid"?C.greenB:C.goldB}`,borderRadius:8,padding:"8px 10px"}}><div style={{fontSize:9,color:C.muted,marginBottom:2}}>Net Profit Share</div><div style={{fontSize:12,fontWeight:800,color:h.status==="paid"?C.green:C.gold,fontFamily:"'DM Mono',monospace"}}>+{fmt(h.share)}</div></div>
+          </div>
+          {h.ref&&<div style={{marginTop:7,fontSize:9,color:C.muted,textAlign:"right"}}>Ref: {h.ref} · Paid {h.paidOn}</div>}
+          {h.cycleEnd&&<div style={{marginTop:7,fontSize:9,color:C.black,fontWeight:600,textAlign:"right"}}>Cycle closes {h.cycleEnd}</div>}
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROFILE
+// ─────────────────────────────────────────────────────────────────────────────
+function ProfileScreen({setSubScreen}){
+  const [twoFA,setTwoFA]=useState(true);
+  const [bio,setBio]=useState(false);
+  const [notif,setNotif]=useState(true);
+  const [copied,setCopied]=useState(false);
+  const [withdraw,setWithdraw]=useState(false);
+  const [wAmount,setWAmount]=useState("");
+  const [wDone,setWDone]=useState(false);
+  const [wLoading,setWLoading]=useState(false);
+
+  if(withdraw) return(
+    <div style={{padding:"20px 16px",fontFamily:"'Barlow',sans-serif",minHeight:"100vh",background:C.white}}>
+      <BackBtn onBack={()=>{setWithdraw(false);setWDone(false);setWAmount("");}}/>
+      <div style={{fontWeight:900,fontSize:22,color:C.black,marginBottom:16,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>Withdraw Earnings</div>
+      {wDone?(
+        <div style={{textAlign:"center",padding:"40px 0",animation:"fadeUp 0.4s ease both"}}>
+          <div style={{width:68,height:68,borderRadius:18,background:C.greenP,border:`2px solid ${C.greenB}`,margin:"0 auto 18px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>✓</div>
+          <div style={{fontWeight:900,fontSize:20,color:C.green,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase",marginBottom:8}}>Withdrawal Submitted</div>
+          <div style={{fontSize:28,fontWeight:900,color:C.black,fontFamily:"'DM Mono',monospace",marginBottom:12}}>{fmt(wAmount)}</div>
+          <div style={{fontSize:13,color:C.muted,lineHeight:1.7,marginBottom:24}}>Funds arrive in your FNB account within <strong style={{color:C.black}}>1–2 business days.</strong></div>
+          <BlackBtn onClick={()=>{setWDone(false);setWAmount("");setWithdraw(false);}} style={{maxWidth:180,margin:"0 auto"}}>Done</BlackBtn>
+        </div>
+      ):(
+        <>
+          <div style={{background:C.black,borderRadius:14,padding:18,textAlign:"center",marginBottom:18}}>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.35)",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:7,fontFamily:"'Barlow Condensed',sans-serif"}}>Available Balance</div>
+            <div style={{fontSize:30,fontWeight:900,color:C.white,fontFamily:"'DM Mono',monospace"}}>R5 500<span style={{fontSize:14,color:"rgba(255,255,255,0.3)"}}>.00</span></div>
+            <div style={{fontSize:10,color:C.green,marginTop:4}}>Min withdrawal: R50</div>
+          </div>
+          <div style={{position:"relative",marginBottom:9}}>
+            <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:C.muted,fontSize:15,fontWeight:700}}>R</span>
+            <input type="number" value={wAmount} onChange={e=>setWAmount(e.target.value)} placeholder="0.00"
+              style={{width:"100%",background:C.light,border:`1.5px solid ${wAmount&&Number(wAmount)>=50?C.green:C.border}`,borderRadius:10,padding:"14px 14px 14px 30px",fontSize:20,color:C.black,fontFamily:"'DM Mono',monospace",outline:"none"}}/>
+          </div>
+          <div style={{display:"flex",gap:7,marginBottom:18}}>
+            {[500,1000,2500,5500].map(q=><button key={q} onClick={()=>setWAmount(String(q))} style={{flex:1,background:Number(wAmount)===q?C.black:C.white,border:`1px solid ${Number(wAmount)===q?C.black:C.border}`,borderRadius:7,padding:"7px 3px",fontSize:10,color:Number(wAmount)===q?C.gold:C.muted,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{q===5500?"All":fmt(q)}</button>)}
+          </div>
+          <BlackBtn disabled={!wAmount||Number(wAmount)<50||Number(wAmount)>5500||wLoading}
+            onClick={()=>{if(!wAmount||Number(wAmount)<50)return;setWLoading(true);setTimeout(()=>{setWLoading(false);setWDone(true);},2000);}}>
+            {wLoading&&<Spin/>}{wLoading?"Processing…":`Withdraw ${wAmount?fmt(wAmount):""}`}
+          </BlackBtn>
+        </>
+      )}
+    </div>
+  );
+
+  return(
+    <div style={{padding:"20px 16px",fontFamily:"'Barlow',sans-serif"}}>
+      <div style={{background:C.black,borderRadius:18,padding:22,textAlign:"center",marginBottom:14,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:2,background:C.gold}}/>
+        <div style={{width:64,height:64,borderRadius:"50%",background:C.gold,margin:"0 auto 11px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>👤</div>
+        <div style={{fontWeight:900,fontSize:18,color:C.white,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>Bokamoso Moshokwa</div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:3,marginBottom:13}}>Bokamoso@connectadon.com</div>
+        <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+          <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.14)",borderRadius:7,padding:"6px 16px",fontSize:11,color:"rgba(255,255,255,0.55)",cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:0.5,textTransform:"uppercase"}}>Edit Profile</button>
+          <button onClick={()=>setSubScreen("breakdown")} style={{background:C.goldP,border:`1px solid ${C.goldB}`,borderRadius:7,padding:"6px 16px",fontSize:11,color:C.gold,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,letterSpacing:0.5,textTransform:"uppercase"}}>📊 Profit Rates</button>
+        </div>
+      </div>
+
+      <div style={{background:C.white,border:`1.5px solid ${C.black}`,borderRadius:14,padding:16,marginBottom:11,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:9,color:C.muted,marginBottom:3,fontWeight:700,letterSpacing:1,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif"}}>Available Balance</div>
+          <div style={{fontSize:24,fontWeight:900,color:C.black,fontFamily:"'DM Mono',monospace"}}>R5 500.00</div>
+        </div>
+        <button onClick={()=>setWithdraw(true)} style={{background:C.black,color:C.gold,border:"none",borderRadius:9,padding:"10px 17px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1,textTransform:"uppercase"}}>Withdraw</button>
+      </div>
+
+      <div style={{display:"flex",
